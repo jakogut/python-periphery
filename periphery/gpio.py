@@ -6,6 +6,14 @@ class GPIOError(IOError):
     pass
 
 class GPIO(object):
+    sysfs_path = "/sys/class/gpio"
+    channel_path = "gpio{}"
+    export_path = "export"
+
+    # Channel specific paths
+    ch_dir_path = "direction"
+    ch_val_path = "value"
+    
     def __init__(self, pin, direction):
         """Instantiate a GPIO object and open the sysfs GPIO corresponding to
         the specified pin, with the specified direction.
@@ -47,12 +55,12 @@ class GPIO(object):
         if direction.lower() not in ["in", "out", "high", "low"]:
             raise ValueError("Invalid direction, can be: \"in\", \"out\", \"high\", \"low\".")
 
-        gpio_path = "/sys/class/gpio/gpio%d" % pin
+        channel = os.path.join(self.sysfs_path, self.channel_path.format(pin))
 
-        if not os.path.isdir(gpio_path):
+        if not os.path.isdir(channel):
             # Export the pin
             try:
-                with open("/sys/class/gpio/export", "w") as f_export:
+                with open(os.path.join(self.sysfs_path, self.export_path), "w") as f_export:
                     f_export.write("%d\n" % pin)
             except IOError as e:
                 raise GPIOError(e.errno, "Exporting GPIO: " + e.strerror)
@@ -60,14 +68,14 @@ class GPIO(object):
         # Write direction
         try:
             direction = direction.lower()
-            with open("/sys/class/gpio/gpio%d/direction" % pin, "w") as f_direction:
+            with open(os.path.join(channel, self.ch_dir_path.format(pin)), "w") as f_direction:
                 f_direction.write(direction + "\n")
         except IOError as e:
             raise GPIOError(e.errno, "Setting GPIO direction: " + e.strerror)
 
         # Open value
         try:
-            self._fd = os.open("/sys/class/gpio/gpio%d/value" % pin, os.O_RDWR)
+            self._fd = os.open(os.path.join(channel, self.ch_val_path), os.O_RDWR)
         except OSError as e:
             raise GPIOError(e.errno, "Opening GPIO: " + e.strerror)
 
